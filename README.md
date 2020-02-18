@@ -6,3 +6,6 @@
 
 Для работы с БД используется [`sqlalchemy`](https://www.sqlalchemy.org/) \
 [Мануал по `sqlalchemy`](https://ru.wikibooks.org/wiki/SQLAlchemy)
+
+Для упрощения развертывания приложения используется [`pipenv`](https://pypi.org/project/pipenv/)\
+[Мануал по `pipenv`](https://webdevblog.ru/pipenv-rukovodstvo-po-novomu-instrumentu-python/)
