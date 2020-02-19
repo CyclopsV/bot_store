@@ -11,3 +11,4 @@ class Config:
     token = BOT_TOKEN
     bot = Bot(token=token, parse_mode='HTML')
     dp = Dispatcher(bot)
+    URI_DB = 'sqlite:///' + os.path.join(app_dir, 'app.db')
