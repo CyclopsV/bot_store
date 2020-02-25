@@ -1,15 +1,18 @@
 from aiogram.types import Message
 from aiogram.utils import executor
-from datetime import datetime
+from aiogram.utils.exceptions import NetworkError
+import logging
+
 
 from config import Config
+from answer import commands
 
 dp = Config.dp
 
 
 @dp.message_handler(commands=['start'])
 async def start_command_process(message: Message):
-    await message.reply(text=message.text)
+    await commands.start(message)
 
 
 @dp.message_handler()
@@ -18,5 +21,8 @@ async def other_message(message: Message):
 
 
 if __name__ == '__main__':
-    print(f'Бот запущен {datetime.today()}')
-    executor.start_polling(dp)
+    logging.info('Старт приложения')
+    try:
+        executor.start_polling(dp)
+    except NetworkError:
+        logging.exception('Не удалось подключиться к серверу телеграмма. (Проверьте подключение к сети, vpn, proxy)')

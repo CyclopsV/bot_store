@@ -1,16 +1,9 @@
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, MetaData, ForeignKey, Table
-from sqlalchemy.ext.declarative import declarative_base, DeclarativeMeta
-from sqlalchemy.orm import relationship, sessionmaker, Session
-from sqlalchemy.engine import Engine
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Table
+from sqlalchemy.orm import relationship
 from datetime import datetime
 from decimal import Decimal
 
-from config import Config
-
-engine: Engine = create_engine(Config.URI_DB, echo=False)
-metadata: MetaData = MetaData(bind=engine)
-Base: DeclarativeMeta = declarative_base(metadata=metadata)
-Session: Session = sessionmaker(bind=engine)
+from . import Base, metadata
 
 
 class User(Base):
