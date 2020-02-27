@@ -1,9 +1,22 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Table
-from sqlalchemy.orm import relationship
+import logging
 from datetime import datetime
 from decimal import Decimal
+from os.path import abspath, dirname, join, isfile, getsize
 
-from . import Base, metadata
+from aiogram import types
+from sqlalchemy import Column, Integer, String, DateTime, Boolean, DECIMAL, ForeignKey, Table
+from sqlalchemy import create_engine, MetaData
+from sqlalchemy.engine import Engine
+from sqlalchemy.ext.declarative import declarative_base, DeclarativeMeta
+from sqlalchemy.orm import relationship
+from sqlalchemy.orm import sessionmaker, Session
+
+from config import Config
+
+engine: Engine = create_engine(Config.URI_DB, echo=False)
+metadata: MetaData = MetaData(bind=engine)
+Base: DeclarativeMeta = declarative_base(metadata=metadata)
+Session: Session = sessionmaker(bind=engine)
 
 
 class User(Base):
@@ -11,11 +24,16 @@ class User(Base):
     id: Integer = Column(Integer, primary_key=True)
     user_name: String = Column(String(50))
     name: String = Column(String(50))
-    admin: bool = Column(bool, default=False)
+    admin: Boolean = Column(Boolean, default=False)
     date_registration: DateTime = Column(DateTime, default=datetime.today())
     date_last_use: DateTime = Column(DateTime, default=datetime.today())
     last_bot_msg: String = Column(String(100))
     orders: list = relationship('Order', backref='user')
+
+    def __init__(self, user: types.User):
+        self.id = user.id
+        self.user_name = user.username
+        self.name = user.full_name
 
     def __repr__(self):
         u_name = f't.me/{self.user_name}'
@@ -35,11 +53,12 @@ class Product(Base):
     name: String = Column(String(50))
     definition: String = Column(String(970))
     img: String = Column(String(105))
-    available: bool = Column(bool, default=False)
-    price: Decimal = Column(Decimal)
+    available: Boolean = Column(Boolean, default=False)
+    price: DECIMAL = DECIMAL(Decimal)
     date_create: DateTime = Column(DateTime, default=datetime.today())
     date_update: DateTime = Column(DateTime, default=datetime.today())
-    orders: list = relationship('Order', secondary=order_product, backref='products')
+
+    # orders = relationship('Order', secondary=order_product, backref='products')
 
     def __repr__(self):
         return f'<Product : {self.id}, {self.name}>'
@@ -48,10 +67,23 @@ class Product(Base):
 class Order(Base):
     __tablename__ = 'orders'
     id: Integer = Column(Integer, primary_key=True)
-    status: bool = Column(bool, default=False)
+    status: Boolean = Column(Boolean, default=False)
     user_id: Integer = Column(Integer, ForeignKey('users.id'))
     user: User = relationship('User', backref='orders')
-    products: list = relationship('Product', secondary=order_product, backref='orders')
+
+    # products = relationship('Product', secondary=order_product, backref='orders')
 
     def __repr__(self):
         return f'Cart : {self.id}, {self.user}, {self.status}>'
+
+
+def create_db() -> None:
+    path_db = join(abspath(dirname(dirname(__file__))), 'app.db')
+    logging.info(f'Поиск базы данных ({path_db})')
+    if not isfile(path_db):
+        logging.info(f'Создание базы данных ({path_db})')
+        metadata.create_all(engine)
+        logging.info(f'База данных создана')
+    else:
+        logging.info(f'База данных существует (Размер: {getsize(path_db)} байт)')
+    return
