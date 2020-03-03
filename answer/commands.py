@@ -1,26 +1,42 @@
-from aiogram.types import Message
+from aiogram.types import Message, ReplyKeyboardMarkup, InlineKeyboardMarkup
+
+from .answer import StaticMessage
+from .fun import get_order
+from .keyboards import Keyboard, InlineKeyboard
 
 
-async def start(message: Message):
-    return await message.answer(f'Здравтсвуйте, я бот')
+async def start(message: Message) -> Message:
+    answer: str = await StaticMessage().start_msg(user_id=message.from_user.id)
+    keyboard: ReplyKeyboardMarkup = await Keyboard().help()
+    return await message.answer(text=answer, reply_markup=keyboard)
 
 
-async def help(message: Message):
-    return await message.answer(f'Список комманд:\n'
-                                f'/start - в любой непонятной ситуации\n'
-                                f'/help - это сообщение\n'
-                                f'/settings - настройки профиля\n'
-                                f'/goods - список товаров\n'
-                                f'/cart - текущая корзина')
+async def help(message: Message) -> Message:
+    answer: str = await StaticMessage().help(message.from_user.id)
+    keyboard: ReplyKeyboardMarkup = await Keyboard().base()
+    return await message.answer(text=answer, reply_markup=keyboard)
 
 
-async def settings(message: Message):
-    return await message.answer(f'Настройки профиля')
+async def settings(message: Message) -> Message:
+    answer: str = await StaticMessage().profile(message.from_user.id)
+    keyboard: InlineKeyboardMarkup = await InlineKeyboard().profile(message.from_user.id)
+    return await message.answer(text=answer, reply_markup=keyboard)
 
 
-async def goods(message: Message):
-    return await message.answer(f'Список товаров')
+async def goods(message: Message) -> Message:
+    answer: str = await StaticMessage().goods(message.from_user.id)
+    keyboard: InlineKeyboardMarkup = await InlineKeyboard().filter_product(message.from_user.id)
+    return await message.answer(text=answer, reply_markup=keyboard)
 
 
-async def cart(message: Message):
-    return await message.answer(f'Текущая корзина')
+async def cart(message: Message) -> Message:
+    return await get_order(message=message)
+
+
+async def admin(message: Message) -> Message:
+    answer_msg: str = await StaticMessage().admin(message.from_user.id)
+    return await message.answer(text=answer_msg)
+
+
+async def cancel(message: Message) -> Message:
+    return await message.answer(text=await StaticMessage().cancel_msg(message.from_user.id))
