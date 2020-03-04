@@ -54,7 +54,7 @@ class Product(Base):
     definition: String = Column(String(970))
     img: String = Column(String(105))
     available: Boolean = Column(Boolean, default=False)
-    price: String = Column(String(11))
+    price: Integer = Column(Integer)
     date_create: DateTime = Column(DateTime, default=datetime.today())
     date_update: DateTime = Column(DateTime, default=datetime.today())
     orders = relationship('Order', secondary=order_product, back_populates='products')
@@ -76,7 +76,7 @@ class Order(Base):
     products = relationship('Product', secondary=order_product, back_populates='orders')
 
     def __repr__(self):
-        return f'<Cart : {self.id}, {self.status}>'
+        return f'<Cart : {self.id}, {self.user}, {self.status}>'
 
 
 def _create_db() -> None:

@@ -4,7 +4,7 @@ from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMar
 from sqlalchemy import select
 
 from database.models import Session, Order, User, Product, engine, order_product
-from .statiс import edit, prod, get_product
+from .statiс import edit, prod, get_product, order_com
 
 
 class Keyboard(ReplyKeyboardMarkup):
@@ -47,12 +47,12 @@ class InlineKeyboard(InlineKeyboardMarkup):
             orders: list = session.query(Order).filter(Order.user == user).filter(Order.status == True).all()
             if len(orders) > 0:
                 list_orders: InlineKeyboardButton = InlineKeyboardButton(text='Список выполненных заказов',
-                                                                         callback_data=edit[0])
+                                                                         callback_data=order_com[0])
                 self.add(list_orders)
             order: Order = session.query(Order).filter(Order.user == user).filter(Order.status == False).first()
             if order:
                 new_order: InlineKeyboardButton = InlineKeyboardButton(text='Текущий заказ',
-                                                                       callback_data=edit[1])
+                                                                       callback_data=order_com[1])
                 self.add(new_order)
         return self
 
@@ -64,10 +64,10 @@ class InlineKeyboard(InlineKeyboardMarkup):
             for product in products:
                 count_product: int = engine.connect().execute(select([order_product.c.count]).where(
                     (order_product.c.order_id == order.id) & (order_product.c.product_id == product.id)))[0]
-                price: Decimal = Decimal(product.price) * Decimal(count_product)
+                price: Decimal = Decimal(f'{round(product.price / 100, 2)}') * count_product
                 money = money + price
             self.add(InlineKeyboardButton(text=f'📅{order.date.strftime("%d.%m.%y")}💸{money}🛒{count_product}',
-                                          callback_data=f'{edit["get_order"]}-{order.id}'))
+                                          callback_data=f'{order_com[2]}-{order.id}'))
         return self
 
     async def product(self, product_id: int, user_id: int, session: Session = Session()) -> InlineKeyboardMarkup:
@@ -79,10 +79,15 @@ class InlineKeyboard(InlineKeyboardMarkup):
         if order:
             query = order_product.select(order_product.c.count).where(
                 (order_product.c.order_id == order.id) & (order_product.c.product_id == product.id))
-            count_product = engine.connect().execute(query).fetchall()[0][-1]
+            count_product = engine.connect().execute(query).fetchall()
+            if count_product:
+                count_product = count_product[0][-1]
+            else:
+                count_product = 0
         count_btn: InlineKeyboardButton = InlineKeyboardButton(text=f'📦{count_product}', callback_data='None')
         self.add(id_btn, count_btn)
-        self.add(InlineKeyboardButton(text=f'Цена: {product.price}', callback_data='None'))
+        price = round(product.price / 100, 2) if product.price else None
+        self.add(InlineKeyboardButton(text=f'Цена: {price}', callback_data='None'))
         if product.available:
             self.add(InlineKeyboardButton(text='Добавить в корзину', callback_data=f'{prod[0]}-{product_id}'))
         else:
@@ -115,18 +120,18 @@ class InlineKeyboard(InlineKeyboardMarkup):
         user: User = session.query(User).filter(User.id == user_id).filter(User.admin == True).first()
         if user:
             if price == prod[3][0]:
-                products = session.query(Product).filter((Product.price < '5000') | (Product.price == None)).order_by(
+                products = session.query(Product).filter((Product.price < 500000) | (Product.price == None)).order_by(
                     Product.name).all()
             else:
-                products = session.query(Product).filter((Product.price >= '5000') | (Product.price == None)).order_by(
+                products = session.query(Product).filter((Product.price >= 500000) | (Product.price == None)).order_by(
                     Product.name).all()
         else:
             if price == prod[3][0]:
-                products = session.query(Product).filter(Product.price < '5000').filter(
+                products = session.query(Product).filter(Product.price < 500000).filter(
                     Product.available == True).order_by(
                     Product.name).all()
             else:
-                products = session.query(Product).filter(Product.price >= '5000').filter(
+                products = session.query(Product).filter(Product.price >= 500000).filter(
                     Product.available == True).order_by(Product.name).all()
         if first < 0:
             first = 0
@@ -135,7 +140,7 @@ class InlineKeyboard(InlineKeyboardMarkup):
         products = products[first:end]
         if products:
             for product in products:
-                self.add(InlineKeyboardButton(text=f'💸{product.price} 🛒{product.name}',
+                self.add(InlineKeyboardButton(text=f'💸{round(product.price / 100, 2)} 🛒{product.name}',
                                               callback_data=f'{get_product}-{product.id}'))
             back_btn: InlineKeyboardButton = InlineKeyboardButton(text='🔙',
                                                                   callback_data=f'{price}-{first - 91}-{first - 1}')

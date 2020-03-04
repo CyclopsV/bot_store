@@ -2,8 +2,8 @@ from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup
 
 from .fun import is_user, get_profile, edit_last_bot_msg, is_last_bot_message, other_answer, is_admin, \
     callback_edit_profile, callback_order, callback_product, callback_filter, InlineKeyboard, callback_edit_product, \
-    add_product
-from .statiс import edit_admin, get_product, edit, order, prod
+    add_product, buy_order, check_order
+from .statiс import edit_admin, get_product, edit, order_com, prod, buy, check, search
 
 
 class Store:
@@ -53,6 +53,10 @@ class StaticMessage:
         await edit_last_bot_msg(user_id)
         return 'Действие отменено'
 
+    async def get_product_msg(self, user_id) -> str:
+        await edit_last_bot_msg(user_id=user_id, bot_msg=search)
+        return 'Отправте слова или цифры для поиска\n\nПоиск производится по id, названию, описанию товаров'
+
 
 async def answer_text(message: Message) -> Message:
     if await is_last_bot_message(message.from_user.id):
@@ -66,7 +70,7 @@ async def callback(callback_query: CallbackQuery) -> Message:
     data: list = callback_query.data.split('-')
     if data[0] in edit:
         answer: Message = await callback_edit_profile(callback_query=callback_query)
-    elif data[0] in order:
+    elif data[0] in order_com:
         answer: Message = await callback_order(callback_query=callback_query)
     elif data[0] in get_product:
         answer: Message = await callback_product(callback_query=callback_query)
@@ -75,17 +79,18 @@ async def callback(callback_query: CallbackQuery) -> Message:
     elif data[0] in prod[2]:
         answer: Message = await callback_edit_product(callback_query=callback_query)
     elif data[0] in prod[0]:
-        answer: Message = await add_product(callback_query=callback_query)
+        answer: Message = await add_product(callback_query=callback_query, n=1)
+    elif data[0] in prod[1]:
+        answer: Message = await add_product(callback_query=callback_query, n=-1)
+    elif data[0] in buy:
+        answer: Message = await buy_order(callback_query=callback_query)
+    elif data[0] in check:
+        answer: Message = await check_order(callback_query=callback_query)
     elif data[0] == 'no prod':
         answer: str = await StaticMessage().goods(callback_query.from_user.id)
         keyboard: InlineKeyboardMarkup = await InlineKeyboard().filter_product(callback_query.from_user.id)
         answer: Message = await callback_query.message.edit_text(text=answer, reply_markup=keyboard)
-
-
-    # elif data[0] in prod[][]:
-    #     answer: Message = await
     else:
-        print(data)
         await callback_query.answer(text='Ничего не произошло, это info-кнопка')
         answer = 'Была нажата информативная кнопка'
     return answer

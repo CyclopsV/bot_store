@@ -53,11 +53,16 @@ async def cancel_command_process(message: Message):
     return await commands.cancel(message)
 
 
+@dp.message_handler(commands=['get_product'])
+@handlers.message_log
+async def cancel_command_process(message: Message):
+    return await commands.get_product(message)
+
+
 @dp.message_handler(content_types=ContentType.PHOTO)
 @handlers.message_log
 async def process_photo(message: Message):
     return await answer_text(message)
-
 
 
 @dp.callback_query_handler()

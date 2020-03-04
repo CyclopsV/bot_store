@@ -1,15 +1,18 @@
 edit_admin = 'ed'
 get_product = 'gp'
+buy = 'bo'
+check = 'co'
+search = 'sp'
 
 edit = ['en',  # edit_name
         'el',  # edit_location
         'ep',  # edit_phone
         ]
 
-order = ['lo',  # list_orders
-         'no',  # new_order
-         'go',  # get_order
-         ]
+order_com = ['lo',  # list_orders
+             'no',  # new_order
+             'go',  # get_order
+             ]
 
 prod = ['ap',  # add 0
         'dp',  # delete 1

@@ -1,13 +1,15 @@
 import logging
+from datetime import datetime
 from decimal import Decimal
 
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 
+from config import Config
 from config.secret import ADMIN_PSW
 from database import Session
 from database.models import User, Order, Product, order_product, engine
 from .keyboards import InlineKeyboard
-from .statiс import edit_admin, edit, prod
+from .statiс import edit_admin, edit, prod, order_com, get_product, buy, check, search
 
 
 async def is_user(user_id: int, session: Session = Session()) -> bool:
@@ -81,7 +83,6 @@ async def other_answer(message: Message, session: Session = Session()):
     elif bot_message[0] == prod[2][1]:
         if message.photo:
             product: Product = session.query(Product).filter(Product.id == bot_message[1]).first()
-            print(message.photo[-1].file_id)
             product.img = message.photo[-1].file_id
             session.commit()
             await edit_last_bot_msg(message.from_user.id)
@@ -102,7 +103,7 @@ async def other_answer(message: Message, session: Session = Session()):
     elif bot_message[0] == prod[2][3]:
         text: str = message.text.replace(' ', '').replace(',', '.')
         try:
-            price: str = str(round(float(text), 2))
+            price: int = int(float(text) * 100)
         except ValueError:
             return await message.answer(f'Не верное значение\nВы ввели: {text}\n\nДля отмены ввода /cancel')
         product: Product = session.query(Product).filter(Product.id == bot_message[1]).first()
@@ -133,6 +134,26 @@ async def other_answer(message: Message, session: Session = Session()):
         profile: str = await get_profile(user.id)
         keyboard: InlineKeyboardMarkup = await InlineKeyboard().profile(user.id)
         return await message.answer(text=profile, reply_markup=keyboard)
+    elif bot_message[0] == search:
+        products: list = session.query(Product).filter(Product.id.ilike(f'%{message.text}%')).all()
+        products_list = []
+        for product in products:
+            products_list.append(product)
+        products: list = session.query(Product).filter(Product.name.ilike(f'%{message.text}%')).all()
+        for product in products:
+            if product not in products_list:
+                products_list.append(product)
+        products: list = session.query(Product).filter(Product.definition.ilike(f'%{message.text}%')).all()
+        for product in products:
+            if product not in products_list:
+                products_list.append(product)
+        keyboard: InlineKeyboardMarkup = InlineKeyboardMarkup()
+        for product in products_list:
+            status = '✔️' if product.available else '❌'
+            keyboard.add(
+                InlineKeyboardButton(text=f'{status} {product.name}', callback_data=f'{get_product}-{product.id}'))
+        await edit_last_bot_msg(message.from_user.id)
+        return await message.answer('Результаты поиска по вашему запросу:', reply_markup=keyboard)
     else:
         return await message.answer(
             'Сообщение не распознано\n\nПожалуйста, воспользуйтесь командой /cancel и попробуйте снова')
@@ -164,14 +185,26 @@ async def get_order(callback_query: CallbackQuery = None, message: Message = Non
     else:
         order: Order = session.query(Order).filter(Order.user_id == user_id).filter(Order.status == False).first()
     price: Decimal = Decimal('0')
+    cp = 0
     keyboard: InlineKeyboardMarkup = InlineKeyboardMarkup()
     for product in order.products:
-        price = price + Decimal(product.price)
+        query = order_product.select(order_product.c.count).where((order_product.c.order_id == order.id) & (
+                order_product.c.product_id == product.id))
+        count_product: int = engine.connect().execute(query).fetchall()
+        if count_product:
+            count_product = count_product[0][-1]
+        else:
+            count_product = 0
+        price = price + Decimal(f'{round(product.price / 100, 2)}') * count_product
+        cp = cp + count_product
         keyboard.add(
-            InlineKeyboardButton(text=f'{product.name}', callback_data=f'{edit["get_product"]}-{product.id}'))
-    answer: str = f'Ваш заказ: #⃣{order.id}\nПозиций: {len(order.products)}\nИтоговая цена:{price}'
+            InlineKeyboardButton(text=f'{product.name}', callback_data=f'{get_product}-{product.id}'))
+    answer: str = f'Ваш заказ: #⃣{order.id}\nПозиций: {len(order.products)} ({cp})\nИтоговая цена: {price}'
     if order.status == True:
         answer = answer + f'\nЗавершен: {order.date.strftime("%d.%m.%y")}'
+    else:
+        if len(order.products) > 0:
+            keyboard.add(InlineKeyboardButton(text='Заказать', callback_data=f'{buy}-{order.id}'))
     if callback_query:
         return await callback_query.message.edit_text(text=answer, reply_markup=keyboard)
     else:
@@ -179,15 +212,15 @@ async def get_order(callback_query: CallbackQuery = None, message: Message = Non
 
 
 async def callback_order(callback_query: CallbackQuery, session: Session = Session()) -> Message:
-    if callback_query.data == edit['list_orders']:
+    if callback_query.data == order_com[0]:
         orders: list = session.query(Order).filter(Order.user_id == callback_query.from_user.id).filter(
             Order.status == True).order_by(Order.date).all()[0:99]
         keyboard: InlineKeyboardMarkup = await InlineKeyboard().order_list_button(orders)
         return await callback_query.message.edit_text(text=f'У вас {len(orders)} закрытых заказов',
                                                       reply_markup=keyboard)
-    elif callback_query.data == edit['new_order']:
+    elif callback_query.data == order_com[1]:
         return await get_order(callback_query=callback_query)
-    elif edit['get_order'] in callback_query.data:
+    elif order_com[2] in callback_query.data:
         data = callback_query.data.split('-')[1]
         return await get_order(order_id=data)
 
@@ -205,10 +238,12 @@ async def callback_product(callback_query: CallbackQuery = None, message: Messag
     if callback_query:
         await callback_query.answer(text='Открытие продукта')
         if product.img:
-            answer = await callback_query.message.answer_photo(photo=product.img, caption=answer, reply_markup=keyboard)
+            answer: Message = await callback_query.message.answer_photo(photo=product.img, caption=answer,
+                                                                        reply_markup=keyboard)
             await callback_query.message.delete()
-            return answer
-
+        else:
+            answer: Message = await callback_query.message.edit_text(text=answer, reply_markup=keyboard)
+        return answer
     else:
         if product.img:
             answer: Message = await message.answer_photo(photo=product.img, caption=answer, reply_markup=keyboard)
@@ -296,27 +331,84 @@ async def callback_edit_product(callback_query: CallbackQuery, session: Session 
     return answer
 
 
-async def add_product(callback_query: CallbackQuery, session: Session = Session()):
+async def add_product(callback_query: CallbackQuery, n: int, session: Session = Session()):
     order: Order = session.query(Order).filter(Order.user_id == callback_query.from_user.id).filter(
         Order.status == False).first()
     if not order:
         order = Order(user_id=callback_query.from_user.id)
         session.add(order)
-        # session.commit()
-        # session = Session()
-        # order: Order = session.query(Order).filter(Order.user_id == callback_query.from_user.id).filter(
-        #     Order.status == False).first()
     product_id: int = int(callback_query.message.reply_markup.inline_keyboard[0][0].text.split('#⃣')[1])
     product: Product = session.query(Product).filter(Product.id == product_id).first()
     if product in order.products:
         query = order_product.select(order_product.c.count).where((order_product.c.order_id == order.id) & (
-                    order_product.c.product_id == product.id))
-
-        count_product: int = engine.connect().execute(query).fetchall()[0][-1]
-        engine.connect().execute(
-            order_product.update().values(count=count_product + 1).where((order_product.c.order_id == order.id) & (
+                order_product.c.product_id == product.id))
+        count_product: int = engine.connect().execute(query).fetchall()
+        if count_product:
+            count_product = count_product[0][-1]
+        if (count_product == 1) and (n == -1):
+            engine.connect().execute(order_product.delete().where((order_product.c.order_id == order.id) & (
                     order_product.c.product_id == product.id)))
+            await callback_query.answer('Товар удален из заказа')
+        else:
+            engine.connect().execute(
+                order_product.update().values(count=count_product + n).where((order_product.c.order_id == order.id) & (
+                        order_product.c.product_id == product.id)))
+            if n > 0:
+                await callback_query.answer('Товар добавлен в заказ')
+            else:
+                await callback_query.answer('Часть товара (-1шт) удалена из заказа')
     else:
         order.products = order.products + [product]
+        await callback_query.answer('Товар добавлен в заказ')
     session.commit()
     return await callback_product(callback_query=callback_query)
+
+
+async def buy_order(callback_query: CallbackQuery, session: Session = Session()):
+    user: User = session.query(User).filter(User.id == callback_query.from_user.id).first()
+    order_id: int = int(callback_query.data.split('-')[1])
+    order: Order = session.query(Order).filter(Order.id == order_id).first()
+    order_price = 0
+    products_text: str = ''
+    for product in order.products:
+        query = order_product.select(order_product.c.count).where((order_product.c.order_id == order.id) & (
+                order_product.c.product_id == product.id))
+        count_product: int = engine.connect().execute(query).fetchall()[0][-1]
+        order_price = order_price + Decimal(f'{round(product.price / 100, 2)}') * count_product
+        product_text: str = f'⭕<b>#p_{product.id}</b> 💲{product.price / 100} * {count_product}\n<i>{product.name}</i>\n\n'
+        products_text = products_text + product_text
+    answer_text = f'Заказ: #o_{order.id}\nЗаказчик: <a href = "tg://user?id={user.id}">{user.name}</a> ' \
+                  f'(@{user.user_name})\nДоставка: {user.location}\n\n<b>Список товаров</b>:\n' + products_text + \
+                  f'Сумма заказа: {order_price}\n\n(‼️После подтверждения заказа, пользователь не сможет его ' \
+                  f'редактировать. Но будет отправлено уведомление о подтверждении заказа)'
+    keyboard: InlineKeyboardMarkup = InlineKeyboardMarkup(
+        InlineKeyboardButton('Подтвердить заказ', callback_data=f'{check}-{product.id}'))
+    admins: list = session.query(User).filter(User.admin == True).all()
+    log: str = f'Отправка заказа ({order}) администраторам:\n'
+    for admin in admins:
+        admin_msg: Message = await Config.bot.send_message(chat_id=admin.id, text=answer_text, reply_markup=keyboard)
+        log = log + f'{admin} - > {admin_msg}\n'
+    logging.info(log)
+    await callback_query.answer('Заказ отправлен на обработку')
+    return await callback_query.message.edit_text(
+        'Ваш заказ отправлен администраторам, дождитесь подтверждения. (Вам могут написать, для уточнения деталей)')
+
+
+async def check_order(callback_query: CallbackQuery, session: Session = Session()):
+    order_id: int = int(callback_query.data.split('-')[1])
+    order: Order = session.query(Order).filter(Order.id == order_id).first()
+    keyboard: InlineKeyboardMarkup = InlineKeyboardMarkup(
+        InlineKeyboardButton(f'Заказ подтвержден {order.date.strftime("%d.%m.%Y %H:%M")}', callback_data='None'))
+    if order.status == False:
+        order.status = True
+        order.date = datetime.today()
+        keyboard = InlineKeyboardMarkup(
+            InlineKeyboardButton(f'Заказ подтвержден {order.date.strftime("%d.%m.%Y %H:%M")}', callback_data='None'))
+    else:
+        await callback_query.answer(f'Заказ уже был подтвержден ({order.date.strftime("%d.%m.%Y %H:%M")})')
+        return await callback_query.message.edit_reply_markup(keyboard)
+    await callback_query.answer('Заказ подтвержден')
+    await callback_query.message.edit_reply_markup(keyboard)
+    user: User = order.user
+    keyboard = InlineKeyboard().add(InlineKeyboardButton(text='Перейти к заказу', callback_data=order_com[2]))
+    return await Config.bot.send_message(user.id, text=f'Ваш заказ #{order.id} подтвержден', reply_markup=keyboard)

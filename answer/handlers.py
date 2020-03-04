@@ -41,4 +41,5 @@ def callback_log(function):
             logging.info(f'Обновлено имя пользователя {user}')
         session.commit()
         logging.info(f'Отправлен ответ:\n{answer}')
+
     return warped
