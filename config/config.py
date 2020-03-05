@@ -7,7 +7,8 @@ from aiogram.dispatcher import Dispatcher
 from .secret import BOT_TOKEN
 
 app_dir = abspath(dirname(dirname(__file__)))
-logging.basicConfig(level=logging.INFO, format='%(levelname)s:%(name)s:%(asctime)s: %(message)s\n')
+logging.basicConfig(level=logging.INFO, format=u'%(levelname)s:%(name)s:%(asctime)s: %(message)s\n',
+                    filename='logging.log')
 
 
 class Config:

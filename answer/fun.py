@@ -222,7 +222,7 @@ async def callback_order(callback_query: CallbackQuery, session: Session = Sessi
         return await get_order(callback_query=callback_query)
     elif order_com[2] in callback_query.data:
         data = callback_query.data.split('-')[1]
-        return await get_order(order_id=data)
+        return await get_order(callback_query=callback_query, order_id=data)
 
 
 async def callback_product(callback_query: CallbackQuery = None, message: Message = None, product_id: int = None,
@@ -381,8 +381,8 @@ async def buy_order(callback_query: CallbackQuery, session: Session = Session())
                   f'(@{user.user_name})\nДоставка: {user.location}\n\n<b>Список товаров</b>:\n' + products_text + \
                   f'Сумма заказа: {order_price}\n\n(‼️После подтверждения заказа, пользователь не сможет его ' \
                   f'редактировать. Но будет отправлено уведомление о подтверждении заказа)'
-    keyboard: InlineKeyboardMarkup = InlineKeyboardMarkup(
-        InlineKeyboardButton('Подтвердить заказ', callback_data=f'{check}-{product.id}'))
+    keyboard: InlineKeyboardMarkup = InlineKeyboard().add(
+        InlineKeyboardButton('Подтвердить заказ', callback_data=f'{check}-{order.id}'))
     admins: list = session.query(User).filter(User.admin == True).all()
     log: str = f'Отправка заказа ({order}) администраторам:\n'
     for admin in admins:
@@ -397,12 +397,13 @@ async def buy_order(callback_query: CallbackQuery, session: Session = Session())
 async def check_order(callback_query: CallbackQuery, session: Session = Session()):
     order_id: int = int(callback_query.data.split('-')[1])
     order: Order = session.query(Order).filter(Order.id == order_id).first()
-    keyboard: InlineKeyboardMarkup = InlineKeyboardMarkup(
-        InlineKeyboardButton(f'Заказ подтвержден {order.date.strftime("%d.%m.%Y %H:%M")}', callback_data='None'))
+    keyboard: InlineKeyboardMarkup = InlineKeyboard().add(
+        InlineKeyboardButton(f'Заказ подтвержден ({order.date.strftime("%d.%m.%Y %H:%M")})', callback_data='None'))
+
     if order.status == False:
         order.status = True
         order.date = datetime.today()
-        keyboard = InlineKeyboardMarkup(
+        keyboard = InlineKeyboard().add(
             InlineKeyboardButton(f'Заказ подтвержден {order.date.strftime("%d.%m.%Y %H:%M")}', callback_data='None'))
     else:
         await callback_query.answer(f'Заказ уже был подтвержден ({order.date.strftime("%d.%m.%Y %H:%M")})')
@@ -410,5 +411,6 @@ async def check_order(callback_query: CallbackQuery, session: Session = Session(
     await callback_query.answer('Заказ подтвержден')
     await callback_query.message.edit_reply_markup(keyboard)
     user: User = order.user
-    keyboard = InlineKeyboard().add(InlineKeyboardButton(text='Перейти к заказу', callback_data=order_com[2]))
+    session.commit()
+    keyboard = InlineKeyboard().add(InlineKeyboardButton(text='Перейти к заказу', callback_data=f'{order_com[2]}-{order.id}'))
     return await Config.bot.send_message(user.id, text=f'Ваш заказ #{order.id} подтвержден', reply_markup=keyboard)

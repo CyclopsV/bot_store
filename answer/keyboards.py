@@ -140,7 +140,11 @@ class InlineKeyboard(InlineKeyboardMarkup):
         products = products[first:end]
         if products:
             for product in products:
-                self.add(InlineKeyboardButton(text=f'💸{round(product.price / 100, 2)} 🛒{product.name}',
+                if product.price:
+                    price = round(product.price / 100, 2)
+                else:
+                    price = None
+                self.add(InlineKeyboardButton(text=f'💸{price} 🛒{product.name}',
                                               callback_data=f'{get_product}-{product.id}'))
             back_btn: InlineKeyboardButton = InlineKeyboardButton(text='🔙',
                                                                   callback_data=f'{price}-{first - 91}-{first - 1}')
